@@ -77,40 +77,55 @@ def _noop(*args, **kwargs): pass
 play_bgm = pause_bgm = resume_bgm = stop_bgm = _noop
 # --- End Sound Mapping ---
 
+# ===== [3] 온습도 안전 읽기 함수 추가 =====
+def read_dht_safe():
+    """
+    DHT 센서에서 온도/습도를 읽고, 실패 시 (None, None)을 반환.
+    """
+    try:
+        temp, hum = dht(DHT_PORT, DHT_TYPE)
+    except Exception:
+        return None, None
+
+    # NaN 체크
+    if (isinstance(temp, float) and math.isnan(temp)) or (
+        isinstance(hum, float) and math.isnan(hum)
+    ):
+        return None, None
+
+    return temp, hum
+
+
 # ========================================
 # LCD Menu Functions 
 # ========================================
+# ===== [4] show_mode 함수 수정 =====
 def show_mode(m):
-    """모드 선택 화면"""
-    if m[0][0] == 1:
+    """모드 선택 화면 + 현재 온도/습도 표시"""
+    mode = m[0][0]
+
+    # 온습도 읽기
+    temp, hum = read_dht_safe()
+
+    # 1줄: 모드 정보
+    if mode == 1:
         setRGB(0, 255, 0)
-        setText("Mode 1\nMove Detection")
+        line1 = "Mode 1 Move"
     else:
         setRGB(0, 100, 255)
-        setText("Mode 2\nStay Detection")
+        line1 = "Mode 2 Stay"
 
-def show_exercise(m):
-    """운동 시간 설정"""
-    setRGB(255, 255, 255)
-    setText(f"Exercise Time\n{m[1][0]}s")
+    # 2줄: 숫자 형태의 온도/습도 표시 (Temp: ___ 형식)
+    if temp is None or hum is None:
+        # 센서 오류 시
+        line2 = "Temp: --.-C"
+    else:
+        # 16자 안에서 온도+습도 둘 다 표시
+        # 예: "T:23.4C H:45.6%"
+        line2 = f"T:{temp:4.1f}C H:{hum:4.1f}%"
 
-def show_rest(m):
-    """휴식 시간 설정"""
-    setRGB(255, 255, 255)
-    setText(f"Rest Time\n{m[2][0]}s")
-
-def show_sets(m):
-    """세트 수 설정"""
-    mode = m[0][0]
-    exer = m[1][0]
-    rest = m[2][0]
-    sets = m[3][0]
-    
-    line1 = f"M:{mode} Ex:{exer} R:{rest}"
-    line2 = f"Sets:{sets} (Press>)"
-    
-    setRGB(0, 255, 255)
     setText(f"{line1}\n{line2}")
+
 
 # ========================================
 # Timer Logic 

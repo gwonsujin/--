@@ -9,10 +9,7 @@ from grove_rgb_lcd import *
 # 버튼 핀 번호 설정
 btn = [22, 23, 24, 25] # B1(Val+), B2(Next), B3(Val-), B4(Prev)
 
-
 BUZZER_D = 3
-
-
 
 # ========================================
 # 초기 설정 
