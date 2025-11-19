@@ -1,7 +1,10 @@
+
 import RPi.GPIO as GPIO
 import time
 from grovepi import *
 from grove_rgb_lcd import *
+import math
+
 
 # ========================================
 # Constants 
@@ -107,6 +110,24 @@ def show_sets(m):
     
     setRGB(0, 255, 255)
     setText(f"{line1}\n{line2}")
+
+def show_env(m):
+    try:
+        temp, hum = grovepi.dht(DHT_PIN, DHT_TYPE)
+        if math.isnan(temp) or math.isnan(hum):
+            temp = hum = 0
+    except:
+        temp = hum = 0
+
+    if 18 <= temp <= 22 and 40 <= hum <= 60:
+        status = "GOOD"
+    elif 15 <= temp <= 27 and 30 <= hum <= 70:
+        status = "MODERATE"
+    else:
+        status = "BAD"
+
+    setRGB(100, 255, 100)
+    setText(f"{temp:.1f}°C {hum:.1f}%\nStatus: {status}")
 
 # ========================================
 # Timer Logic 
@@ -268,7 +289,7 @@ def start_exercise(m):
 # ========================================
 # Main Loop 
 # ========================================
-menu_funcs = [show_mode, show_exercise, show_rest, show_sets]
+menu_funcs = [show_mode, show_exercise, show_rest, show_sets, show_env]
 step = 0
 
 setRGB(0,255,0)
@@ -283,7 +304,10 @@ try:
             ok_sound() # Beep on button press
             match step:
                 case 0: # Mode
-                    menu[0][0] = 1 if menu[0][0] == 2 else 2
+                    menu[0][0] += 1
+                    if menu[0][0] > 3:
+                        menu[0][0] = 1
+
                 case 1: # Exercise
                     menu[1][0] += 10
                 case 2: # Rest
@@ -296,20 +320,38 @@ try:
         
         # --- Button 2 (Next) ---
         elif GPIO.input(btn[1]) == GPIO.HIGH:
-            ok_sound() # Beep on button press
-            step = step + 1
-            if step >= len(menu_funcs):  # 3을 넘으면 운동 시작
+            ok_sound()
+            mode = menu[0][0]
+
+            # Mode 3 → Mode 화면(step=0)에서 바로 Env(step=4)로 이동
+            if mode == 3:
+                if step == 0:
+                    step = 4  # show_env 위치
+                else:
+                    step = 0  # Env에서 Next 누르면 Mode 화면으로 복귀
+
+                menu_funcs[step](menu)
+                time.sleep(BUTTON_DEBOUNCE_S)
+                continue
+
+            # Mode 1, 2 → 기존 운동 흐름 유지
+            step += 1
+            if step >= len(menu_funcs):
                 step = start_exercise(menu)
-            
+
             menu_funcs[step](menu)
             time.sleep(BUTTON_DEBOUNCE_S)
+
 
         # --- Button 3 (Val-) ---
         elif GPIO.input(btn[2]) == GPIO.HIGH:
             ok_sound() # Beep on button press
             match step:
                 case 0: # Mode
-                    menu[0][0] = 1 if menu[0][0] == 2 else 2
+                    menu[0][0] -= 1
+                    if menu[0][0] < 1:
+                        menu[0][0] = 3
+
                 case 1: # Exercise
                     menu[1][0] = max(10, menu[1][0] - 10)
                 case 2: # Rest
