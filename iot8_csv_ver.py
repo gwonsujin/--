@@ -362,18 +362,21 @@ def start_exercise(m):
 # ========================================
 # [수정] 기록 저장 함수 (모듈 사용)
 # ========================================
+# 전역 변수를 수정하기 위해 global 선언 필요
 def save_record(m):
-    """
-    모듈을 사용하여 계산, 레벨 판별, CSV 저장을 수행
-    """
+    global records  # <--- [추가]
+    
     # 1. 계산
     timestamp, w_time, sets, total_sec = logic.calculate_total_time(m)
     
-    # 2. 레벨 판별 (이번 운동에 대한 등급)
+    # 2. 레벨 판별
     current_level_str = leveling.determine_level(total_sec)
     
     # 3. 저장
     saver.save_to_csv(timestamp, w_time, sets, total_sec, current_level_str)
+    
+    # 4. [핵심 수정] 메모리 상의 기록 초기화 -> 다음 조회 시 CSV 다시 읽음
+    records = []  # <--- [추가] 이렇게 하면 다음 조회 때 갱신된 파일을 읽어옴
     
     print(f"--> 기록 저장 완료: {total_sec}초 ({current_level_str})")
 
@@ -403,6 +406,16 @@ def record_mode_wrapper(m):
                             records.append((row[0], int(row[3])))
             else:
                 records = []
+                for row in reader:
+                    # 데이터 유효성 검사 강화
+                    if len(row) >= 5: # 날짜, 운동, 세트, 총시간, 등급 (5개 열)
+                        try:
+                            # 날짜와 총시간(정수변환)만 추출
+                            r_date = row[0]
+                            r_sec = int(row[3]) 
+                            records.append((r_date, r_sec))
+                        except ValueError:
+                            continue # 숫자가 아니면 이 줄은 건너뜀
         except Exception as e:
             print(f"기록 읽기 실패: {e}")
             records = []
