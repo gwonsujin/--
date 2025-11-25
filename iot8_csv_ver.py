@@ -386,8 +386,9 @@ def save_record(m):
 def record_mode_wrapper(m):
     global records, record_index
 
-    # 파일은 한 번만 읽거나, 레코드가 비었을 때 다시 읽음
+    # records가 비어있을 때만 파일 읽기 시도 (새로고침)
     if not records:
+        records = [] # 초기화
         try:
             import csv
             import os
@@ -396,29 +397,32 @@ def record_mode_wrapper(m):
             if os.path.isfile(file_name):
                 with open(file_name, "r", encoding='utf-8') as f:
                     reader = csv.reader(f)
-                    next(reader, None) # 헤더(제목줄) 건너뛰기
+                    next(reader, None) # 헤더 건너뛰기
                     
-                    # CSV 구조: [0]날짜, [1]운동, [2]세트, [3]총시간, [4]등급
-                    # 필요한 것: 날짜와 총시간
-                    records = []
                     for row in reader:
-                        if len(row) >= 4:
-                            records.append((row[0], int(row[3])))
+                        # 데이터 유효성 검사 (길이가 충분하고, 시간이 숫자인지 확인)
+                        if len(row) >= 5: 
+                            try:
+                                r_date = row[0]       # 날짜
+                                r_sec = int(row[3])   # 총 운동시간
+                                records.append((r_date, r_sec))
+                            except ValueError:
+                                continue # 숫자가 깨진 데이터는 무시
             else:
+                # 파일이 없으면 그냥 빈 리스트 유지
                 records = []
-                for row in reader:
-                    # 데이터 유효성 검사 강화
-                    if len(row) >= 5: # 날짜, 운동, 세트, 총시간, 등급 (5개 열)
-                        try:
-                            # 날짜와 총시간(정수변환)만 추출
-                            r_date = row[0]
-                            r_sec = int(row[3]) 
-                            records.append((r_date, r_sec))
-                        except ValueError:
-                            continue # 숫자가 아니면 이 줄은 건너뜀
+                
         except Exception as e:
             print(f"기록 읽기 실패: {e}")
             records = []
+
+    # 인덱스 범위 안전장치
+    if records:
+        record_index = max(0, min(record_index, len(records)-1))
+    else:
+        record_index = 0
+
+    show_record_page(records, record_index)
 
     # 인덱스 범위 정리
     if records:
