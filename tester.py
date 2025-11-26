@@ -1,4 +1,9 @@
-# tester.py
+################################################################################
+# 파일 5: tester.py
+# 목적: 각 모듈의 독립적인 기능 테스트
+# 사용법: python tester.py 실행
+################################################################################
+
 import datetime_logic as logic
 import csv_module as saver
 import level_module as leveling
