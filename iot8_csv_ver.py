@@ -338,6 +338,29 @@ def run_exercise_session(m):
     time.sleep(BUTTON_DEBOUNCE_S)
 
 # ========================================
+# [운동 세션 로직 - 전체 세션]
+# ========================================
+def run_exercise_session(m):
+    """전체 운동 세션 실행"""
+    init_pir_for_exercise()
+    start_sound()
+    
+    if responsive_sleep(0.5): 
+        return
+    
+    for s in range(1, m[3][0] + 1):
+        if not run_single_set(s, m[3][0], m[0][0], m[1][0], m[2][0]): 
+            return
+    
+    setRGB(255, 0, 255)
+    setText("Complete!\nPress any btn")
+    
+    while all(GPIO.input(p) == GPIO.LOW for p in btn): 
+        time.sleep(0.05)
+    
+    time.sleep(BUTTON_DEBOUNCE_S)
+
+# ========================================
 # [데이터 저장 함수]
 # ========================================
 def save_record(m):
