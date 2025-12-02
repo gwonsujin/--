@@ -1,42 +1,33 @@
 import time
 import threading
 import random
-from grovepi import *
+from gpiozero import PWMLED
 
 # ========================================
-# Dual LED Pin Configuration (GrovePi)
+# Multi-LED Configuration (Direct GPIO)
 # ========================================
-# A1 Port -> Pin 15
-# A2 Port -> Pin 16
-# Note: GrovePi Analog ports used as Digital Outputs
+# gpiozero 라이브러리를 사용하여 PWM 및 다중 LED 제어
+# 기본 핀: GPIO 5, 6, 13, 19 (4개 LED)
 
-class DualLightController:
-    def __init__(self, pin_left=15, pin_right=16):
+class MultiLightController:
+    def __init__(self, pins=[5, 6, 13, 19]):
         self.running = False
         self.current_mode = None
         self.thread = None
         self.music_playing = False
         
-        # 핀 설정 (A1=15, A2=16)
-        self.LED_LEFT = pin_left
-        self.LED_RIGHT = pin_right
-        
-        self._setup_gpio()
-
-    def _setup_gpio(self):
-        """GPIO 초기화"""
+        # PWMLED 객체 리스트 생성
+        self.leds = []
         try:
-            pinMode(self.LED_LEFT, "OUTPUT")
-            pinMode(self.LED_RIGHT, "OUTPUT")
+            for p in pins:
+                self.leds.append(PWMLED(p))
         except Exception as e:
-            print(f"Light Init Error: {e}")
+            print(f"LED Init Error: {e}")
 
     def _all_off(self):
         """모든 LED 끄기"""
-        try:
-            digitalWrite(self.LED_LEFT, 0)
-            digitalWrite(self.LED_RIGHT, 0)
-        except: pass
+        for led in self.leds:
+            led.value = 0
 
     def set_music_playing(self, playing):
         """음악 재생 상태 설정"""
@@ -81,96 +72,81 @@ class DualLightController:
     def cleanup(self):
         """종료 시 리소스 해제"""
         self.stop()
-        # GrovePi는 별도의 cleanup이 필요 없거나 digitalWrite(0)으로 충분
+        for led in self.leds:
+            led.close()
 
     # --- Effects ---
 
     def _effect_exercise(self):
-        """운동 모드: 리듬 매치 (Rhythm Match) - BGM: Rosé 'APT' Style"""
+        """운동 모드: Random Pop (APT Style)"""
         while self.running:
             try:
                 if self.music_playing:
-                    # APT의 경쾌한 리듬에 맞춰 더 빠르고 끊어지는 느낌으로 점멸
-                    pattern = random.choice(['LEFT', 'RIGHT', 'BOTH', 'BOTH', 'CROSS'])
-                    # 비트감: 0.1~0.25초 (약 120~300 BPM 느낌)
-                    duration = random.uniform(0.1, 0.25) 
+                    # APT의 톡톡 튀는 느낌: 랜덤한 LED가 짧게 반짝임
+                    target_led = random.choice(self.leds)
+                    target_led.value = 1.0 # 켜짐
                     
-                    if pattern == 'LEFT':
-                        digitalWrite(self.LED_LEFT, 1)
-                        digitalWrite(self.LED_RIGHT, 0)
-                    elif pattern == 'RIGHT':
-                        digitalWrite(self.LED_LEFT, 0)
-                        digitalWrite(self.LED_RIGHT, 1)
-                    elif pattern == 'CROSS':
-                        # 따닥 (빠르게 교차)
-                        digitalWrite(self.LED_LEFT, 1)
-                        digitalWrite(self.LED_RIGHT, 0)
-                        time.sleep(0.05)
-                        digitalWrite(self.LED_LEFT, 0)
-                        digitalWrite(self.LED_RIGHT, 1)
-                        duration -= 0.05 # 시간 보정
-                    else:
-                        digitalWrite(self.LED_LEFT, 1)
-                        digitalWrite(self.LED_RIGHT, 1)
+                    # 비트감: 0.05 ~ 0.2초 (빠름)
+                    duration = random.uniform(0.05, 0.2)
+                    time.sleep(duration)
                     
-                    time.sleep(max(0, duration))
-                    self._all_off()
-                    time.sleep(0.05) # 짧은 간격 (Staccato)
+                    target_led.value = 0 # 꺼짐
+                    
+                    # 다음 비트까지 아주 짧은 대기 (Staccato)
+                    time.sleep(random.uniform(0.02, 0.1))
                 else:
-                    # 심장박동 (Heartbeat)
-                    digitalWrite(self.LED_LEFT, 1)
-                    digitalWrite(self.LED_RIGHT, 1)
+                    # 심장박동 (Heartbeat) - 전체 동기화
+                    for led in self.leds: led.value = 1.0
                     time.sleep(0.1)
-                    self._all_off()
+                    for led in self.leds: led.value = 0
                     time.sleep(0.1)
-                    digitalWrite(self.LED_LEFT, 1)
-                    digitalWrite(self.LED_RIGHT, 1)
+                    for led in self.leds: led.value = 1.0
                     time.sleep(0.1)
-                    self._all_off()
+                    for led in self.leds: led.value = 0
                     time.sleep(1.0)
             except: pass
 
     def _effect_rest(self):
-        """휴식 모드: 천천히 깜빡임 (Slow Blink)"""
-        # A1/A2 포트는 PWM(숨쉬기) 지원이 어려우므로 천천히 깜빡임으로 대체
+        """휴식 모드: Synchronized Breathing"""
+        # gpiozero의 pulse()를 쓰면 좋지만, 스레드 제어를 위해 직접 구현
         while self.running:
             try:
-                digitalWrite(self.LED_LEFT, 1)
-                digitalWrite(self.LED_RIGHT, 1)
-                time.sleep(1.0)
-                digitalWrite(self.LED_LEFT, 0)
-                digitalWrite(self.LED_RIGHT, 0)
+                # Inhale
+                for i in range(0, 101, 2):
+                    if not self.running: break
+                    val = i / 100.0
+                    for led in self.leds: led.value = val
+                    time.sleep(0.04)
+                
+                time.sleep(0.5)
+                
+                # Exhale
+                for i in range(100, -1, -2):
+                    if not self.running: break
+                    val = i / 100.0
+                    for led in self.leds: led.value = val
+                    time.sleep(0.04)
+                    
                 time.sleep(1.0)
             except: pass
 
     def _effect_pause(self):
-        """일시정지: 비상등 (Hazard Light)"""
+        """일시정지: Wave / Chase (순차 점멸)"""
         while self.running:
             try:
-                digitalWrite(self.LED_LEFT, 1)
-                digitalWrite(self.LED_RIGHT, 1)
-                time.sleep(0.5)
-                self._all_off()
-                time.sleep(0.5)
+                for led in self.leds:
+                    if not self.running: break
+                    led.value = 1.0
+                    time.sleep(0.2)
+                    led.value = 0
+                time.sleep(0.1)
             except: pass
 
     def _effect_complete(self):
-        """완료: 경찰차 스트로브 (Strobe)"""
+        """완료: Chaos Strobe (무작위 고속 점멸)"""
         while self.running:
             try:
-                # 왼쪽 3번
-                for _ in range(3):
-                    if not self.running: break
-                    digitalWrite(self.LED_LEFT, 1)
-                    time.sleep(0.05)
-                    digitalWrite(self.LED_LEFT, 0)
-                    time.sleep(0.05)
-                
-                # 오른쪽 3번
-                for _ in range(3):
-                    if not self.running: break
-                    digitalWrite(self.LED_RIGHT, 1)
-                    time.sleep(0.05)
-                    digitalWrite(self.LED_RIGHT, 0)
-                    time.sleep(0.05)
+                for led in self.leds:
+                    led.value = random.choice([0, 1])
+                time.sleep(0.05)
             except: pass
