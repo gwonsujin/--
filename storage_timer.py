@@ -1,10 +1,7 @@
 import RPi.GPIO as GPIO
 import time
 import math
-<<<<<<< Updated upstream
-=======
 import pygame
->>>>>>> Stashed changes
 from grovepi import *
 import grove_rgb_lcd as lcd
 import os
@@ -26,13 +23,10 @@ DHT_TYPE = 0     # 0: DHT11, 1: DHT22
 
 # 파일 저장 경로 설정
 BASE_DIR = "/home/pi/iot"
-RECORDS_FILE = "exercise_time.txt" # 요청대로 파일명 변경
+RECORDS_FILE = "exercise_time.txt" 
 RECORDS_PATH = os.path.join(BASE_DIR, RECORDS_FILE)
 TOTAL_TIME_PATH = os.path.join(BASE_DIR, "total_time.txt")
-<<<<<<< Updated upstream
-=======
 MUSIC_PATH = os.path.join(BASE_DIR, "music.mp3")
->>>>>>> Stashed changes
 
 # 타이머 및 센서 설정 값
 BUTTON_DEBOUNCE_S = 0.15
@@ -45,12 +39,6 @@ PIR_MOTION_THRESHOLD = 2
 PAUSE_ON_NO_MOTION_S = 8  # 움직임 감지 모드에서 움직임 없을 시 일시정지 대기 시간
 PAUSE_ON_MOTION_S = 8     # 움직임 없음 모드에서 움직임 감지 시 일시정지 대기 시간
 
-<<<<<<< Updated upstream
-# 초기 메뉴 설정 값
-# [모드, 운동시간, 휴식시간, 세트수]
-menu = [
-    [1],  # 모드 (1: 움직임 감지, 2: 움직임 없음 감지, 3: 환경 정보, 4: 기록 보기)
-=======
 # 음악 초기화
 try:
     pygame.mixer.init()
@@ -69,7 +57,6 @@ except Exception as e:
 # [모드, 운동시간, 휴식시간, 세트수]
 menu = [
     [1],  # 모드 (1: 움직임, 2: 정지, 3: 환경, 4: 기록, 5: 레벨)
->>>>>>> Stashed changes
     [30], # 운동 시간 (초)
     [10], # 휴식 시간 (초)
     [3]   # 세트 수
@@ -129,10 +116,6 @@ ok_sound = short_beep                               # 확인/선택
 cancel_sound = lambda: short_beep(times=2, dur_ms=80) # 취소/경고
 alert_sound = long_beep                             # 알림 (운동/휴식 전환 등)
 start_sound = lambda: short_beep(times=2)           # 시작
-<<<<<<< Updated upstream
-def _noop(*args, **kwargs): pass
-play_bgm = pause_bgm = resume_bgm = stop_bgm = _noop # 배경음 (현재 미사용)
-=======
 
 # 배경음 제어
 def play_bgm():
@@ -159,7 +142,6 @@ def resume_bgm():
         try:
             sound_sample.unpause()
         except: pass
->>>>>>> Stashed changes
 
 # ========================================
 # 4. LCD 디스플레이 (LCD Display)
@@ -226,11 +208,7 @@ def show_env_info():
         set_lcd_text("DHT Error")
 
 # ========================================
-<<<<<<< Updated upstream
-# 6. 기록 관리 로직 (Record Logic - Mode 4)
-=======
 # 6. 기록 관리 로직 (Record Logic - Mode 4 & 5)
->>>>>>> Stashed changes
 # ========================================
 def load_records():
     """파일에서 운동 기록을 불러옴"""
@@ -312,8 +290,6 @@ def show_record_page(index):
     set_lcd_color(255, 165, 0) # 주황색
     set_lcd_text(f"Rec {index+1}/{len(records)}\n{date} {sec}s")
 
-<<<<<<< Updated upstream
-=======
 def show_level():
     """누적 시간에 따른 레벨 표시 (Mode 5)"""
     try:
@@ -331,7 +307,6 @@ def show_level():
     set_lcd_color(200, 100, 255)
     set_lcd_text(f"LEVEL {level}\n{percent}%")
 
->>>>>>> Stashed changes
 # ========================================
 # 7. 타이머 및 운동 로직 (Timer & Exercise Logic)
 # ========================================
@@ -373,10 +348,6 @@ def wait_for_resume(required_state):
         time.sleep(0.3)
     return True # 정지 버튼 눌림
 
-<<<<<<< Updated upstream
-def run_exercise_session(m):
-    """실제 운동 세션 실행"""
-=======
 def check_pause_condition(mode, motion, last_valid_state_time):
     """모션/정지 상태에 따른 일시정지 조건 확인"""
     now = time.time()
@@ -477,110 +448,16 @@ def run_single_set(set_num, total_sets, mode, exercise_s, rest_s):
 
 def run_exercise_session(m):
     """전체 운동 세션 실행"""
->>>>>>> Stashed changes
     try:
         pinMode(PIR_PIN, "INPUT")
         time.sleep(0.5)
     except Exception as e:
         print(f"PIR 초기화 오류: {e}")
-<<<<<<< Updated upstream
-    
-=======
 
->>>>>>> Stashed changes
     mode = m[0][0]
     exercise_s = m[1][0]
     rest_s = m[2][0]
     total_sets = m[3][0]
-<<<<<<< Updated upstream
-    
-    # 모드에 따른 요구 상태 (1: 움직임 필요, 2: 움직임 없어야 함)
-    required_state = 1 if mode == 1 else 0
-    
-    start_sound() # 시작 알림
-    if responsive_sleep(0.5): return
-    
-    for set_num in range(1, total_sets + 1):
-        # --- 운동 시간 시작 ---
-        timer_s = 0
-        last_valid_state_time = time.time()
-        last_pir_state = -1 
-        
-        while timer_s < exercise_s:
-            motion = read_pir_stable()
-
-            # 상태 변경 시 효과음
-            if last_pir_state != -1 and motion != last_pir_state:
-                state_change_beep()
-            last_pir_state = motion
-            
-            now = time.time()
-            status_text = "MOVE" if motion == 1 else "STAY"
-            pause_reason = ""
-            
-            # 일시정지 조건 확인
-            time_since_last_valid = now - last_valid_state_time
-            if mode == 1 and motion == 0 and time_since_last_valid >= PAUSE_ON_NO_MOTION_S:
-                pause_reason = "No Motion!" # 움직임 감지 모드인데 움직임 없음
-            elif mode == 2 and motion == 1 and time_since_last_valid >= PAUSE_ON_MOTION_S:
-                pause_reason = "Motion Detect!" # 정지 감지 모드인데 움직임 있음
-            elif motion == required_state:
-                last_valid_state_time = now
-            
-            # 일시정지 처리
-            if pause_reason:
-                cancel_sound()
-                set_lcd_color(255, 165, 0)
-                set_lcd_text(f"PAUSED\n{pause_reason}")
-                
-                # 재개 대기
-                if wait_for_resume(required_state):
-                    # 재개 중 정지 버튼 눌림
-                    set_lcd_color(255, 0, 0)
-                    set_lcd_text("Stopped\nReturning...")
-                    time.sleep(1.5)
-                    return
-                
-                ok_sound() # 재개 알림
-                last_valid_state_time = time.time()
-                last_pir_state = -1
-            
-            # 진행 상황 표시
-            remaining_s = exercise_s - timer_s
-            bar = get_progress_bar(timer_s, exercise_s, 10)
-            line1 = f"M{mode} Set {set_num}/{total_sets} {status_text}"
-            line2 = f"{bar} {remaining_s}s"
-            set_lcd_color(0, 255, 0)
-            set_lcd_text(f"{line1}\n{line2}")
-            
-            if responsive_sleep(1):
-                set_lcd_color(255, 0, 0)
-                set_lcd_text("Stopped\nReturning...")
-                time.sleep(1.5)
-                return
-            
-            timer_s += 1
-            
-        # --- 운동 세트 종료, 휴식 시간 시작 ---
-        alert_sound()
-        
-        if set_num < total_sets:
-            for timer_s in range(rest_s):
-                remaining_s = rest_s - timer_s
-                bar = get_progress_bar(timer_s, rest_s, 10)
-                set_lcd_color(0, 150, 255)
-                set_lcd_text(f"Rest {set_num}/{total_sets}\n{bar} {remaining_s}s")
-                
-                if responsive_sleep(1):
-                    set_lcd_color(255, 0, 0)
-                    set_lcd_text("Stopped\nReturning...")
-                    time.sleep(1.5)
-                    return
-            
-            start_sound() # 다음 세트 시작 알림
-                
-    # --- 모든 세트 완료 ---
-=======
 
     start_sound()
     if responsive_sleep(0.5):
@@ -592,29 +469,19 @@ def run_exercise_session(m):
             return
 
     # 완료 화면
->>>>>>> Stashed changes
     set_lcd_color(255, 0, 255)
     set_lcd_text("Complete!\nPress any btn")
     
     # 기록 저장
     save_record(exercise_s, total_sets)
-<<<<<<< Updated upstream
-    
-    # 버튼 입력 대기 (아무 버튼이나 누르면 종료)
-=======
 
->>>>>>> Stashed changes
     while all(GPIO.input(p) == GPIO.LOW for p in BTN_PINS):
         time.sleep(0.05)
     time.sleep(BUTTON_DEBOUNCE_S)
 
 def start_exercise(m):
     """운동 시작 진입점"""
-<<<<<<< Updated upstream
-    # 모드 3, 4에서는 운동 시작 불가
-=======
     # 모드 3, 4, 5에서는 운동 시작 불가
->>>>>>> Stashed changes
     if m[0][0] >= 3:
         set_lcd_color(255, 0, 0)
         set_lcd_text("Cannot Start\nin this Mode")
@@ -648,11 +515,8 @@ def show_mode(m):
         show_env_info()
     elif mode == 4:
         show_record_page(record_index)
-<<<<<<< Updated upstream
-=======
     elif mode == 5:
         show_level()
->>>>>>> Stashed changes
 
 def show_exercise(m):
     """운동 시간 설정 화면"""
@@ -699,11 +563,7 @@ def main():
                 ok_sound()
                 if step == 0: # 모드 변경
                     menu[0][0] += 1
-<<<<<<< Updated upstream
-                    if menu[0][0] > 4: menu[0][0] = 1
-=======
                     if menu[0][0] > 5: menu[0][0] = 1 # 1~5 순환
->>>>>>> Stashed changes
                 elif step == 1: # 운동 시간 증가
                     menu[1][0] += 10
                 elif step == 2: # 휴식 시간 증가
@@ -723,11 +583,7 @@ def main():
             elif GPIO.input(BTN_PINS[1]) == GPIO.HIGH:
                 ok_sound()
                 
-<<<<<<< Updated upstream
-                # 모드 3, 4에서는 다음 단계로 넘어가지 않고 화면 갱신만 함
-=======
                 # 모드 3, 4, 5에서는 다음 단계로 넘어가지 않고 화면 갱신만 함
->>>>>>> Stashed changes
                 if step == 0 and menu[0][0] >= 3:
                      menu_funcs[step](menu)
                 else:
@@ -744,11 +600,7 @@ def main():
                 ok_sound()
                 if step == 0: # 모드 변경
                     menu[0][0] -= 1
-<<<<<<< Updated upstream
-                    if menu[0][0] < 1: menu[0][0] = 4
-=======
                     if menu[0][0] < 1: menu[0][0] = 5 # 1~5 순환
->>>>>>> Stashed changes
                 elif step == 1: # 운동 시간 감소
                     menu[1][0] = max(10, menu[1][0] - 10)
                 elif step == 2: # 휴식 시간 감소
@@ -791,17 +643,10 @@ def main():
     except KeyboardInterrupt:
         print("\n종료합니다.")
     finally:
-<<<<<<< Updated upstream
-=======
         stop_bgm()
->>>>>>> Stashed changes
         GPIO.cleanup()
         set_lcd_color(128, 128, 128)
         set_lcd_text("Goodbye!")
 
 if __name__ == "__main__":
-<<<<<<< Updated upstream
     main()
-=======
-    main()
->>>>>>> Stashed changes
