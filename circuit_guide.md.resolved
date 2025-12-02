@@ -1,7 +1,6 @@
 # Smart Exercise Timer - Circuit Wiring Guide (Direct RPi Version)
 
-**Note**: Since simulators like Tinkercad do not have a "GrovePi Shield" component, you must wire components **directly** to the Raspberry Pi GPIO pins.
-This guide provides a pin mapping that works for the visual diagram.
+**Note**: This guide is based on the **[iot10.py](file:///c:/Users/User/Downloads/--/iot10.py)** code but adapted for **Direct Wiring** (since simulators like Tinkercad lack the GrovePi shield).
 
 ## 1. Component List (Simulator Equivalents)
 -   **Raspberry Pi 3/4**
@@ -10,25 +9,25 @@ This guide provides a pin mapping that works for the visual diagram.
 -   **Push Buttons (x4)**: Tactile Switches + 10kΩ Resistors (Pull-down).
 -   **PIR Sensor**: Standard PIR module (3 pins).
 -   **Piezo Buzzer**: Standard passive/active buzzer.
--   **Temperature Sensor**: TMP36 (analog) or DHT11/22 (digital) depending on what's available.
+-   **Temperature Sensor**: TMP36 (analog) or DHT11/22 (digital).
 -   **LCD 16x2 (I2C)**: Use the "LCD 16x2 (I2C)" component.
 
-## 2. Direct Wiring Map (No GrovePi)
+## 2. Direct Wiring Map (Matching iot10.py)
 
-We will map the "Grove Ports" used in the code to specific "RPi GPIO Pins" for the diagram.
+We map the Grove Ports used in [iot10.py](file:///c:/Users/User/Downloads/--/iot10.py) to specific RPi GPIO pins for the diagram.
 
-| Component | Grove Port (Code) | **Connect to RPi Pin** | Wiring Details |
+| Component | Code Port | **Connect to RPi Pin** | Wiring Details |
 | :--- | :--- | :--- | :--- |
-| **LED 1** | Direct GPIO | **GPIO 5** (Pin 29) | Anode(+) -> GPIO 5 |
-| **LED 2** | Direct GPIO | **GPIO 6** (Pin 31) | Anode(+) -> GPIO 6 |
-| **LED 3** | Direct GPIO | **GPIO 13** (Pin 33) | Anode(+) -> GPIO 13 |
-| **LED 4** | Direct GPIO | **GPIO 19** (Pin 35) | Anode(+) -> GPIO 19 |
+| **LED 1** | Direct | **GPIO 5** (Pin 29) | Anode(+) -> GPIO 5 |
+| **LED 2** | Direct | **GPIO 6** (Pin 31) | Anode(+) -> GPIO 6 |
+| **LED 3** | Direct | **GPIO 13** (Pin 33) | Anode(+) -> GPIO 13 |
+| **LED 4** | Direct | **GPIO 19** (Pin 35) | Anode(+) -> GPIO 19 |
 | **All LEDs** | - | **GND** | Cathode(-) -> 220Ω -> GND |
 | | | | |
-| **Button 1** | Direct GPIO | **GPIO 22** (Pin 15) | Leg A -> GPIO 22 |
-| **Button 2** | Direct GPIO | **GPIO 23** (Pin 16) | Leg A -> GPIO 23 |
-| **Button 3** | Direct GPIO | **GPIO 24** (Pin 18) | Leg A -> GPIO 24 |
-| **Button 4** | Direct GPIO | **GPIO 25** (Pin 22) | Leg A -> GPIO 25 |
+| **Button 1** | GPIO 22 | **GPIO 22** (Pin 15) | Leg A -> GPIO 22 |
+| **Button 2** | GPIO 23 | **GPIO 23** (Pin 16) | Leg A -> GPIO 23 |
+| **Button 3** | GPIO 24 | **GPIO 24** (Pin 18) | Leg A -> GPIO 24 |
+| **Button 4** | GPIO 25 | **GPIO 25** (Pin 22) | Leg A -> GPIO 25 |
 | **All Btns** | - | **3.3V** | Leg B -> 3.3V |
 | **All Btns** | - | **GND** | Leg A -> 10kΩ -> GND (Pull-down) |
 | | | | |
@@ -38,7 +37,7 @@ We will map the "Grove Ports" used in the code to specific "RPi GPIO Pins" for t
 | **LCD (I2C)** | I2C | **GPIO 2** (SDA) | SDA -> SDA (Pin 3) |
 | **LCD (I2C)** | I2C | **GPIO 3** (SCL) | SCL -> SCL (Pin 5) |
 
-> ***Note on Buzzer**: In the GrovePi code, D3 is used. However, on a real RPi, GPIO 3 is SCL (used by LCD). For the diagram, connect the Buzzer to **GPIO 12** (a PWM pin) to avoid visual conflict with the LCD wires.*
+> ***Note on Buzzer**: [iot10.py](file:///c:/Users/User/Downloads/--/iot10.py) uses D3 (GPIO 3). However, GPIO 3 is also the I2C SCL pin used by the LCD. GrovePi handles this internally, but for direct wiring in a simulator, this creates a conflict. Connect the Buzzer to **GPIO 12** in the diagram to avoid errors.*
 
 ## 3. Breadboard Layout Strategy
 
@@ -64,4 +63,4 @@ We will map the "Grove Ports" used in the code to specific "RPi GPIO Pins" for t
 -   **Buzzer**: Place near the LCD. (+) -> GPIO 12, (-) -> GND.
 -   **LCD**: Place top-center. VCC->5V, GND->GND, SDA->GPIO 2, SCL->GPIO 3.
 
-This layout will look professional and logically organized for your presentation!
+This layout perfectly visualizes the system described in [iot10.py](file:///c:/Users/User/Downloads/--/iot10.py)!
