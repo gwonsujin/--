@@ -1,0 +1,72 @@
+# System Flowchart
+
+This flowchart illustrates the logic of the **Smart Exercise Timer**, including the main menu, exercise session loop, and the integrated light control system.
+
+```mermaid
+flowchart TD
+    Start([Program Start]) --> Init[Init Hardware & LightController]
+    Init --> Menu{Main Menu Loop}
+    
+    %% Menu Navigation
+    Menu -- Btn 1/3 (Up/Down) --> ChangeSetting[Change Mode / Time / Sets]
+    ChangeSetting --> Menu
+    
+    Menu -- Btn 2 (Select) --> CheckMode{Check Mode}
+    
+    %% Modes
+    CheckMode -- Mode 3 --> EnvInfo[Show Temp/Humidity]
+    EnvInfo --> Menu
+    CheckMode -- Mode 4 --> ShowRec[Show Records]
+    ShowRec --> Menu
+    CheckMode -- Mode 5 --> ShowLvl[Show Level]
+    ShowLvl --> Menu
+    
+    CheckMode -- Mode 1/2 --> StartEx[Start Exercise Session]
+    
+    %% Exercise Session
+    subgraph Exercise_Session [Exercise Session Logic]
+        direction TB
+        StartEx --> PlayMusic[Play BGM]
+        StartEx --> LightEx[Light: EXERCISE Mode\n(Random Pop / Heartbeat)]
+        
+        LoopSets{Set Loop\n(1 to Total Sets)}
+        PlayMusic --> LoopSets
+        
+        %% Exercise Phase
+        LoopSets -- Start Set --> TimerEx{Exercise Timer}
+        TimerEx -- Tick --> CheckPIR[Read PIR Sensor]
+        CheckPIR -- Motion/NoMotion --> CheckPause{Pause Condition?}
+        
+        CheckPause -- Yes --> PauseState[Pause Logic]
+        PauseState --> LightPause[Light: PAUSE Mode\n(Wave/Chase)]
+        PauseState -- Resume --> LightExResume[Light: EXERCISE Mode]
+        LightExResume --> TimerEx
+        
+        CheckPause -- No --> UpdateLCD[Update LCD]
+        UpdateLCD --> TimerEx
+        
+        %% Rest Phase
+        TimerEx -- Time Up --> RestPhase[Rest Phase]
+        RestPhase --> LightRest[Light: REST Mode\n(Sync Breathing)]
+        RestPhase -- Timer --> RestTimer{Rest Timer}
+        RestTimer -- Time Up --> NextSet{Next Set?}
+        
+        NextSet -- Yes --> LoopSets
+        NextSet -- No --> Complete
+    end
+    
+    %% Completion
+    Complete([Session Complete]) --> StopMusic[Stop Music]
+    StopMusic --> LightComp[Light: COMPLETE Mode\n(Chaos Strobe)]
+    LightComp --> SaveRec[Save Record\n(exercise_time.txt)]
+    SaveRec --> WaitBtn[Wait for Button]
+    WaitBtn --> Menu
+```
+
+## Legend
+- **Main Flow**: Standard user interaction path.
+- **Light Modes**:
+    - `EXERCISE`: Random Pop (APT Style) or Heartbeat.
+    - `REST`: Synchronized Breathing.
+    - `PAUSE`: Wave / Chase effect.
+    - `COMPLETE`: Chaos Strobe.
