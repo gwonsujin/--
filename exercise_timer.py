@@ -1,5 +1,6 @@
 import RPi.GPIO as GPIO
 import time
+import math
 from grovepi import *
 from grove_rgb_lcd import *
 
@@ -10,6 +11,19 @@ from grove_rgb_lcd import *
 btn = [22, 23, 24, 25] # B1(Val+), B2(Next), B3(Val-), B4(Prev)
 
 BUZZER_D = 3
+DHT_PIN = 7
+DHT_TYPE = 0 # 0 for DHT11, 1 for DHT22
+
+# --- Advanced Timer Constants ---
+STOP_BUTTON_PIN = btn[3] # B4 is the Stop button
+BUTTON_DEBOUNCE_S = 0.15
+BUTTON_HOLD_S = 2.0
+
+PIR_SAMPLES = 3
+PIR_INTERVAL_S = 0.1
+PIR_MOTION_THRESHOLD = 2
+PAUSE_ON_NO_MOTION_S = 8
+PAUSE_ON_MOTION_S = 8
 
 # ========================================
 # 초기 설정 
@@ -20,6 +34,9 @@ menu = [
     [10], # 휴식시간 (m[2][0])
     [3]  # 세트수 (m[3][0])
 ]
+
+records = []
+record_index = 0
 
 # ========================================
 # 하드웨어 초기화 
@@ -74,16 +91,112 @@ play_bgm = pause_bgm = resume_bgm = stop_bgm = _noop
 # --- End Sound Mapping ---
 
 # ========================================
+# Environment Logic (Mode 3)
+# ========================================
+def classify_env(temp, hum):
+    if 18 <= temp <= 22 and 40 <= hum <= 60:
+        return "GOOD"
+    if 15 <= temp <= 27 and (30 <= hum < 40 or 60 < hum <= 70):
+        return "MODERATE"
+    return "BAD"
+
+def show_env_info():
+    try:
+        temp, hum = dht(DHT_PIN, DHT_TYPE)
+        if math.isnan(temp) or math.isnan(hum):
+            setRGB(255, 0, 0)
+            setText("Sensor Error")
+            return
+
+        status = classify_env(temp, hum)
+        if status == "GOOD":
+            setRGB(0, 255, 0)
+        elif status == "MODERATE":
+            setRGB(255, 255, 0)
+        else:
+            setRGB(255, 0, 0)
+
+        line1 = f"Status:{status}"
+        line2 = f"T:{temp:4.1f}C H:{hum:4.1f}%"
+        setText(line1 + "\n" + line2)
+    except Exception as e:
+        print(f"DHT Error: {e}")
+        setRGB(255, 0, 0)
+        setText("DHT Error")
+
+# ========================================
+# Record Logic (Mode 4)
+# ========================================
+def load_records():
+    global records
+    try:
+        with open("/home/pi/iot/records.txt", "r") as f:
+            lines = f.readlines()
+            records = [(d, int(sec)) for d, sec in (l.strip().split(",") for l in lines) if "," in l]
+    except Exception:
+        records = []
+
+def save_record(exercise_s, total_sets):
+    total_ex = exercise_s * total_sets
+    today = time.strftime("%Y-%m-%d")
+
+    # 기록 저장
+    try:
+        with open("/home/pi/iot/records.txt", "a") as f:
+            f.write(f"{today},{total_ex}\n")
+    except Exception as e:
+        print(f"Save Error: {e}")
+
+    # 누적 시간 업데이트
+    try:
+        try:
+            with open("/home/pi/iot/total_time.txt", "r") as f:
+                total = int(f.read().strip())
+        except:
+            total = 0
+        
+        total += total_ex
+        
+        with open("/home/pi/iot/total_time.txt", "w") as f:
+            f.write(str(total))
+    except Exception as e:
+        print(f"Total Time Update Error: {e}")
+
+def show_record_page(index):
+    global records
+    load_records() # Refresh records
+    
+    if not records:
+        setRGB(255, 100, 100)
+        setText("NO RECORDS")
+        return
+
+    # Ensure index is valid
+    if index >= len(records): index = len(records) - 1
+    if index < 0: index = 0
+    
+    date, sec = records[index]
+    setRGB(255, 165, 0)
+    setText(f"Rec {index+1}/{len(records)}\n{date} {sec}s")
+
+# ========================================
 # LCD Menu Functions 
 # ========================================
 def show_mode(m):
     """모드 선택 화면"""
-    if m[0][0] == 1:
+    mode = m[0][0]
+    if mode == 1:
         setRGB(0, 255, 0)
         setText("Mode 1\nMove Detection")
-    else:
+    elif mode == 2:
         setRGB(0, 100, 255)
         setText("Mode 2\nStay Detection")
+    elif mode == 3:
+        # Environment Mode - Show Info Directly
+        show_env_info()
+    elif mode == 4:
+        # Record Mode - Show Records Directly
+        show_record_page(record_index)
 
 def show_exercise(m):
     """운동 시간 설정"""
@@ -247,12 +360,22 @@ def run_exercise_session(m):
     setRGB(255, 0, 255)
     setText("Complete!\nPress any btn")
     
+    # Save Record
+    save_record(exercise_s, total_sets)
+    
     while all(GPIO.input(p) == GPIO.LOW for p in btn):
         time.sleep(0.05)
     time.sleep(BUTTON_DEBOUNCE_S)
 
 def start_exercise(m):
     """운동 시작"""
+    # Prevent starting exercise in Mode 3 or 4
+    if m[0][0] >= 3:
+        setRGB(255, 0, 0)
+        setText("Cannot Start\nin this Mode")
+        time.sleep(1.0)
+        return 0
+
     print("\n=== 운동 시작 ===")
     print(f"Mode: {m[0][0]}, 운동: {m[1][0]}s, 휴식: {m[2][0]}s, 세트: {m[3][0]}")
     
@@ -283,7 +406,8 @@ try:
             ok_sound() # Beep on button press
             match step:
                 case 0: # Mode
-                    menu[0][0] = 1 if menu[0][0] == 2 else 2
+                    menu[0][0] += 1
+                    if menu[0][0] > 4: menu[0][0] = 1 # Cycle 1-4
                 case 1: # Exercise
                     menu[1][0] += 10
                 case 2: # Rest
@@ -291,17 +415,37 @@ try:
                 case 3: # Sets
                     menu[3][0] += 1
             
+            # Special handling for Record Mode navigation
+            if step == 0 and menu[0][0] == 4:
+                record_index = (record_index + 1) % max(1, len(records))
+
             menu_funcs[step](menu)
             time.sleep(BUTTON_DEBOUNCE_S)
         
         # --- Button 2 (Next) ---
         elif GPIO.input(btn[1]) == GPIO.HIGH:
             ok_sound() # Beep on button press
-            step = step + 1
-            if step >= len(menu_funcs):  # 3을 넘으면 운동 시작
-                step = start_exercise(menu)
             
-            menu_funcs[step](menu)
+            # If in Mode 3 or 4, prevent going to next steps (Exercise/Rest/Sets)
+            # Just stay in Mode selection or go back to Mode 1?
+            # Let's just allow cycling back to start or block.
+            # Decision: If Mode 3 or 4, Next button does nothing or maybe refreshes?
+            # Actually, to be user friendly, if I am in Mode 3, I might want to go to Mode 4.
+            # But "Next" is usually "Next Step" (Mode -> Time -> Rest -> Sets).
+            # So if I am in Mode 3 (Env), "Next Step" doesn't make sense.
+            # I will make "Next" just return to Mode 1 if in Mode 3/4?
+            # Or better, just block it.
+            
+            if step == 0 and menu[0][0] >= 3:
+                 # Do nothing or maybe flash "N/A"
+                 pass
+            else:
+                step = step + 1
+                if step >= len(menu_funcs):  # 3을 넘으면 운동 시작
+                    step = start_exercise(menu)
+                
+                menu_funcs[step](menu)
+            
             time.sleep(BUTTON_DEBOUNCE_S)
 
         # --- Button 3 (Val-) ---
@@ -309,13 +453,18 @@ try:
             ok_sound() # Beep on button press
             match step:
                 case 0: # Mode
-                    menu[0][0] = 1 if menu[0][0] == 2 else 2
+                    menu[0][0] -= 1
+                    if menu[0][0] < 1: menu[0][0] = 4 # Cycle 1-4
                 case 1: # Exercise
                     menu[1][0] = max(10, menu[1][0] - 10)
                 case 2: # Rest
                     menu[2][0] = max(5, menu[2][0] - 5)
                 case 3: # Sets
                     menu[3][0] = max(1, menu[3][0] - 1)
+            
+            # Special handling for Record Mode navigation
+            if step == 0 and menu[0][0] == 4:
+                record_index = (record_index - 1) % max(1, len(records))
             
             menu_funcs[step](menu)
             time.sleep(BUTTON_DEBOUNCE_S)
