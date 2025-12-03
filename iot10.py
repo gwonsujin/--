@@ -4,6 +4,7 @@ import pygame
 from grovepi import *
 from grove_rgb_lcd import *
 import math
+from light import MultiLightController
 
 # ========================================
 # Constants 
@@ -33,6 +34,10 @@ pygame.mixer.init()
 sound_sample=pygame.mixer.music
 sound_sample.load("/home/pi/iot/music.mp3")
 sound_sample.set_volume(0.1)
+
+# --- Light Controller ---
+light_controller = MultiLightController()
+
 
 # ========================================
 # 초기 설정 
@@ -214,6 +219,9 @@ def handle_pause(reason, required_state):
     """Pause 화면 표시 후 Resume 기다리기"""
     pause_bgm()
     cancel_sound()
+    
+    # Light: PAUSE
+    light_controller.set_mode('PAUSE')
 
     setRGB(255, 165, 0)
     setText(f"PAUSED\n{reason}")
@@ -227,6 +235,14 @@ def handle_pause(reason, required_state):
 
     ok_sound()
     resume_bgm()
+    
+    # Light: Resume previous mode (Exercise or Rest?)
+    # Since handle_pause is called from run_single_set (Exercise) or potentially Rest,
+    # we need to know where we came from.
+    # However, handle_pause is currently only called from run_single_set (Exercise).
+    # If we add pause to rest later, we might need a param.
+    # For now, we assume we return to Exercise.
+    light_controller.set_mode('EXERCISE') 
     return True
 
 
@@ -242,6 +258,7 @@ def update_exercise_display(mode, set_num, total_sets, motion, timer_s, exercise
 
 def run_rest_interval(set_num, total_sets, rest_s):
     """세트 사이 휴식 구간"""
+    light_controller.set_mode('REST')
     for t in range(rest_s):
         remaining_s = rest_s - t
         bar = get_progress_bar(t, rest_s, 10)
@@ -261,6 +278,7 @@ def run_rest_interval(set_num, total_sets, rest_s):
 
 def run_single_set(set_num, total_sets, mode, exercise_s, rest_s):
     """한 세트의 운동 구간 전체 처리"""
+    light_controller.set_mode('EXERCISE')
     play_bgm()
     timer_s = 0
     last_valid_state_time = time.time()
@@ -327,6 +345,7 @@ def run_exercise_session(m):
             return
 
     # 완료 화면
+    light_controller.set_mode('COMPLETE')
     setRGB(255, 0, 255)
     setText("Complete!\nPress any btn")
 
@@ -363,6 +382,7 @@ def start_exercise(m):
 
     setRGB(0, 255, 0)
     setText("Back to Menu")
+    light_controller.set_mode('OFF')
     time.sleep(0.5)
     return 0  # 운동 후 다시 메뉴로 돌아감 (step = 0)
 
@@ -647,6 +667,7 @@ try:
 except KeyboardInterrupt:
     print("\n종료합니다.")
 finally:
+    light_controller.cleanup()
     GPIO.cleanup()
     setRGB(128, 128, 128)
     setText("Goodbye!")
