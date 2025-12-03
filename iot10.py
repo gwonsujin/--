@@ -5,7 +5,6 @@ from grovepi import *
 from grove_rgb_lcd import *
 import math
 
-
 # ========================================
 # Constants 
 # ========================================
@@ -15,7 +14,10 @@ btn = [22, 23, 24, 25] # B1(Val+), B2(Next), B3(Val-), B4(Prev)
 # 모션감지/부저 핀 번호 설정
 PIR_D = 8
 BUZZER_D = 3
-LED_PIN = 4 # LED Pin
+
+# --- NEW: LED Pins ---
+LED_PINS = [4, 5, 6] # D4, D5, D6
+# --- END NEW ---
 
 sensor_port = 7
 sensor_type = 0
@@ -36,7 +38,6 @@ sound_sample=pygame.mixer.music
 sound_sample.load("/home/pi/iot/music.mp3")
 sound_sample.set_volume(0.1)
 
-
 # ========================================
 # 초기 설정 
 # ========================================
@@ -46,6 +47,26 @@ menu = [
     [10], # 휴식시간 (m[2][0])
     [3]  # 세트수 (m[3][0])
 ]
+
+# ========================================
+# LED Helper Functions
+# ========================================
+def set_led_state(pin, state):
+    try:
+        digitalWrite(pin, state)
+    except IOError:
+        print(f"Error writing to LED {pin}")
+
+def blink_leds(pins, times=1, duration=0.2):
+    for _ in range(times):
+        for pin in pins:
+            set_led_state(pin, 1)
+            time.sleep(duration)
+            set_led_state(pin, 0)
+
+def all_leds_off():
+    for pin in LED_PINS:
+        set_led_state(pin, 0)
 
 # ========================================
 # 하드웨어 초기화 
@@ -58,11 +79,18 @@ def init_hardware():
     for pin in btn:
         GPIO.setup(pin, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
     
-    # GrovePi PIR, buzzer 초기화
+    # GrovePi PIR, buzzer, LEDs 초기화
     try:
         pinMode(PIR_D, "INPUT")
         pinMode(BUZZER_D, "OUTPUT")
-        pinMode(LED_PIN, "OUTPUT")
+        for pin in LED_PINS:
+            pinMode(pin, "OUTPUT")
+            set_led_state(pin, 0) # Ensure off
+            
+        # Startup Blink
+        print("Initializing Hardware... LED Test")
+        blink_leds(LED_PINS, times=1, duration=0.1)
+        
     except Exception as e:
         print(f"HW Init Error: {e}")
 
@@ -218,13 +246,7 @@ def handle_pause(reason, required_state):
     """Pause 화면 표시 후 Resume 기다리기"""
     pause_bgm()
     cancel_sound()
-    
-    # Light: PAUSE
-    # light_controller.set_mode('PAUSE')
-    try:
-        digitalWrite(LED_PIN, 0)
-    except IOError:
-        pass
+    all_leds_off() # Pause 시 LED 끄기
 
     setRGB(255, 165, 0)
     setText(f"PAUSED\n{reason}")
@@ -238,14 +260,169 @@ def handle_pause(reason, required_state):
 
     ok_sound()
     resume_bgm()
+    return True
+
+
+def update_exercise_display(mode, set_num, total_sets, motion, timer_s, exercise_s):
+    """LCD 운동 진행 상황 갱신"""
+    status_text = "MOVE" if motion == 1 else "STAY"
+    remaining_s = exercise_s - timer_s
+    bar = get_progress_bar(timer_s, exercise_s, 10)
+
+    setRGB(0, 255, 0)
+    setText(f"M{mode} Set {set_num}/{total_sets} {status_text}\n{bar} {remaining_s}s")
+
+
+def run_rest_interval(set_num, total_sets, rest_s):
+    """세트 사이 휴식 구간"""
+    for t in range(rest_s):
+        remaining_s = rest_s - t
+        bar = get_progress_bar(t, rest_s, 10)
+
+        setRGB(0, 150, 255)
+        setText(f"Rest {set_num}/{total_sets}\n{bar} {remaining_s}s")
+        
+        # Blink D5 for Rest
+        if t % 2 == 0:
+            set_led_state(LED_PINS[1], 1)
+        else:
+            set_led_state(LED_PINS[1], 0)
+
+        if responsive_sleep(1):
+            setRGB(255, 0, 0)
+            setText("Stopped\nReturning...")
+            all_leds_off()
+            time.sleep(1.5)
+            return False
+            
+    set_led_state(LED_PINS[1], 0) # Ensure off
+    start_sound()  # 휴식 끝 → 다음 세트 시작 알림
+    return True
+
+
+def run_single_set(set_num, total_sets, mode, exercise_s, rest_s):
+    """한 세트의 운동 구간 전체 처리"""
+    play_bgm()
+    timer_s = 0
+    last_valid_state_time = time.time()
+    last_pir_state = -1
+
+    required_state = 1 if mode == 1 else 0
+
+    while timer_s < exercise_s:
+        motion = read_pir_stable()
+
+        # 상태 변화 감지 비프음
+        if last_pir_state != -1 and motion != last_pir_state:
+            state_change_beep()
+        last_pir_state = motion
+
+        # Pause 조건 체크
+        reason = check_pause_condition(mode, motion, last_valid_state_time)
+        if reason:
+            if not handle_pause(reason, required_state):
+                return False
+            last_valid_state_time = time.time()
+            last_pir_state = -1
+
+        # 정상 상태면 타이머 갱신
+        if motion == required_state:
+            last_valid_state_time = time.time()
+
+        update_exercise_display(mode, set_num, total_sets, motion, timer_s, exercise_s)
+        
+        # Blink D4 for Exercise
+        if timer_s % 2 == 0:
+            set_led_state(LED_PINS[0], 1)
+        else:
+            set_led_state(LED_PINS[0], 0)
+
+        if responsive_sleep(1):
+            stop_bgm()
+            all_leds_off()
+            return False
+
+        timer_s += 1
     
-    # Light: Resume previous mode (Exercise or Rest?)
-    # Since handle_pause is called from run_single_set (Exercise) or potentially Rest,
-    # we need to know where we came from.
-    # However, handle_pause is currently only called from run_single_set (Exercise).
-    # If we add pause to rest later, we might need a param.
-    # For now, we assume we return to Exercise.
-    # light_controller.set_mode('EXERCISE') 
+    set_led_state(LED_PINS[0], 0) # Ensure off
+    stop_bgm()
+    alert_sound()
+
+    # 마지막 세트가 아니면 휴식
+    if set_num < total_sets:
+        return run_rest_interval(set_num, total_sets, rest_s)
+
+    return True
+
+
+# ========================================
+# ✨ 최종: 분리된 run_exercise_session
+# ========================================
+def run_exercise_session(m):
+    init_pir_for_exercise()
+
+    mode = m[0][0]
+    exercise_s = m[1][0]
+    rest_s = m[2][0]
+    total_sets = m[3][0]
+
+    start_sound()
+    if responsive_sleep(0.5):
+        return
+
+    for set_num in range(1, total_sets + 1):
+        ok = run_single_set(set_num, total_sets, mode, exercise_s, rest_s)
+        if not ok:
+            return
+
+    # 완료 화면
+    setRGB(255, 0, 255)
+    setText("Complete!\nPress any btn")
+    
+    # Completion Blink
+    for _ in range(3):
+        blink_leds(LED_PINS, times=1, duration=0.2)
+        time.sleep(0.2)
+
+    while all(GPIO.input(p) == GPIO.LOW for p in btn):
+        time.sleep(0.05)
+
+    time.sleep(BUTTON_DEBOUNCE_S)
+
+def start_exercise(m):
+    """운동 시작"""
+    print("\n=== 운동 시작 ===")
+    print(f"Mode: {m[0][0]}, 운동: {m[1][0]}s, 휴식: {m[2][0]}s, 세트: {m[3][0]}")
+    
+    #운동 함수 시작
+    sound_sample.play()
+    run_exercise_session(m) 
+    sound_sample.stop()
+    all_leds_off() # Ensure all off
+
+    print("=== 운동 종료 ===")
+
+    #운동기록
+    try:
+        with open("records.txt", "a", encoding="utf-8") as f:  # append 모드로 열기
+            timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
+            mode_name = {1: "MOVE", 2: "STAY"}.get(m[0][0], "UNKNOWN")
+            record_line = f"[{timestamp}] Mode:{mode_name}, Exercise:{m[1][0]}s, Rest:{m[2][0]}s, Sets:{m[3][0]}\n"
+            f.write(record_line)
+        print(f"운동 기록 저장 완료 → record.txt ({record_line.strip()})")
+        time.sleep(0.5)
+    except Exception as e:
+        print(f"기록 저장 실패: {e}")
+        time.sleep(0.5)
+
+
+    setRGB(0, 255, 0)
+    setText("Back to Menu")
+    time.sleep(0.5)
+    return 0  # 운동 후 다시 메뉴로 돌아감 (step = 0)
+
+#온습도
+def show_temp():
     temp, hum = dht(sensor_port, sensor_type)
 
     if 15 <= temp <= 27 and 30 <= hum <= 70:
@@ -505,6 +682,7 @@ try:
                 if time.time() - press_start > BUTTON_HOLD_S:
                     print("\n=== Quit Program (Hold B4) ===")
                     long_beep()
+                    all_leds_off() # Ensure off on quit
                     raise KeyboardInterrupt 
                 time.sleep(0.05)
             # --- END NEW ---
@@ -525,11 +703,6 @@ try:
 except KeyboardInterrupt:
     print("\n종료합니다.")
 finally:
-    # light_controller.cleanup()
-    try:
-        digitalWrite(LED_PIN, 0)
-    except:
-        pass
     GPIO.cleanup()
     setRGB(128, 128, 128)
     setText("Goodbye!")

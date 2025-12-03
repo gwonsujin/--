@@ -1,0 +1,77 @@
+# Walkthrough - LED Integration & Documentation Prompts
+
+I have successfully modified [iot10.py](file:///c:/Users/User/Downloads/--/iot10.py) to include LED blinking effects and generated the requested prompts for your documentation.
+
+## Changes to [iot10.py](file:///c:/Users/User/Downloads/--/iot10.py)
+
+### LED Functionality
+-   **New Constants**: Added `LED_PINS = [4, 5, 6]`.
+-   **Initialization**: configured D4, D5, D6 as OUTPUT.
+-   **Startup**: LEDs blink in sequence to confirm hardware readiness.
+-   **Exercise Phase**: D4 blinks (toggles every second) to indicate activity.
+-   **Rest Phase**: D5 blinks (toggles every second) to indicate rest.
+-   **Completion**: All LEDs blink 3 times to signal session end.
+-   **Safety**: Added [all_leds_off()](file:///c:/Users/User/Downloads/--/iot10.py#67-70) to ensure LEDs turn off when pausing or quitting.
+
+## Documentation Prompts
+
+### Circuit Diagram Prompt
+> [!TIP]
+> Use this prompt with a diagram generation tool or for your own reference.
+
+**Components:**
+1.  **Raspberry Pi 3/4** + **GrovePi Shield**
+2.  **Sensors/Actuators**:
+    -   **Buzzer**: D3
+    -   **LEDs**: D4, D5, D6
+    -   **DHT Sensor**: D7
+    -   **PIR Motion Sensor**: D8
+    -   **LCD**: I2C Port
+3.  **Buttons** (GPIO Direct):
+    -   **Btn 1 (Val+)**: GPIO 22
+    -   **Btn 2 (Next)**: GPIO 23
+    -   **Btn 3 (Val-)**: GPIO 24
+    -   **Btn 4 (Prev/Stop)**: GPIO 25
+
+### Software Architecture (Mermaid) Prompt
+> [!TIP]
+> Copy and paste this into a Mermaid Live Editor to generate the chart.
+
+```mermaid
+graph TD
+    subgraph Hardware Layer
+        Init[init_hardware]
+        ReadPIR[read_pir_stable]
+        Blink[blink_leds]
+        Beep[beep_ms]
+    end
+
+    subgraph UI Layer
+        Menu[Menu Display Functions]
+        LCD[LCD Output]
+    end
+
+    subgraph Logic Layer
+        Main[Main Loop]
+        Session[run_exercise_session]
+        Exercise[run_single_set]
+        Rest[run_rest_interval]
+        Pause[handle_pause]
+    end
+
+    Main -->|Select Mode| Menu
+    Main -->|Start| Session
+    Session --> Exercise
+    Exercise -->|Loop| ReadPIR
+    Exercise -->|Update| LCD
+    Exercise -->|Blink D4| Blink
+    Exercise -->|Pause Condition| Pause
+    Exercise -->|Complete| Rest
+    Rest -->|Blink D5| Blink
+    Rest -->|Next Set| Exercise
+    Session -->|Finish| Blink
+```
+
+## Verification Results
+-   **Code Analysis**: The code now includes explicit calls to control LEDs at the correct state transitions.
+-   **Safety**: `try-except` blocks prevent crashes if LEDs are missing. `finally` block ensures cleanup.
